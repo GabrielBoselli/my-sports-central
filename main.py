@@ -26,18 +26,25 @@ def daily_update():
     global last_update
     print('Rodando atualização diária...', flush=True)
     try:
-        print('Importando collector...', flush=True)
-        from data import collector
-        print('Importando features...', flush=True)
-        from data import features
-        print('Importando train...', flush=True)
-        from data import train
+        import importlib.util
+
+        def load_module(name, path):
+            spec = importlib.util.spec_from_file_location(name, path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+
+        base = os.path.dirname(os.path.abspath(__file__))
+
+        collector = load_module('collector', os.path.join(base, 'data', 'collector.py'))
+        features = load_module('features', os.path.join(base, 'data', 'features.py'))
+        train = load_module('train', os.path.join(base, 'data', 'train.py'))
 
         print('Rodando collector...', flush=True)
         collector.collect_all()
         print('Coleta concluída.', flush=True)
 
-        data_path = os.environ.get('DATA_PATH', 'data')
+        data_path = os.environ.get('DATA_PATH', os.path.join(base, 'data'))
         conn = sqlite3.connect(os.path.join(data_path, 'nba.db'))
         conn.execute('DELETE FROM game_features')
         conn.commit()
