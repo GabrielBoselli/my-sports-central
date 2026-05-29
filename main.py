@@ -85,4 +85,4 @@ if __name__ == '__main__':
         if not continuar:
             print('Encerrando bot — sem jogos ativos.', flush=True)
             break
-        
+        time.sleep(30)
