@@ -6,7 +6,8 @@ from datetime import datetime, timezone, timedelta
 from nba_api.stats.static import teams as nba_teams_static
 from sports.basketball.nba import get_live_scores
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'nba.db')
+DATA_PATH = os.environ.get('DATA_PATH', os.path.dirname(__file__))
+DB_PATH = os.path.join(DATA_PATH, 'nba.db')
 
 FEATURES = [
     'home_last10_winrate', 'away_last10_winrate',
@@ -23,7 +24,7 @@ FEATURES = [
 ]
 
 def load_models():
-    base = os.path.dirname(__file__)
+    base = os.environ.get('DATA_PATH', os.path.dirname(__file__))
     with open(os.path.join(base, 'model_result.pkl'), 'rb') as f:
         model_result = pickle.load(f)
     with open(os.path.join(base, 'model_over.pkl'), 'rb') as f:

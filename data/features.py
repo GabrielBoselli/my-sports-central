@@ -2,7 +2,8 @@ import sqlite3
 import os
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'nba.db')
+DATA_PATH = os.environ.get('DATA_PATH', os.path.dirname(__file__))
+DB_PATH = os.path.join(DATA_PATH, 'nba.db')
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
