@@ -26,21 +26,21 @@ def daily_update():
     print('Rodando atualização diária...', flush=True)
     try:
         python = sys.executable
-        base = os.path.join(os.path.dirname(__file__), 'data')
+        root = os.path.dirname(os.path.abspath(__file__))
 
-        subprocess.run([python, os.path.join(base, 'collector.py')], check=True)
+        subprocess.run([python, os.path.join(root, 'data', 'collector.py')], check=True)
         print('Coleta concluída.', flush=True)
 
-        data_path = os.environ.get('DATA_PATH', base)
+        data_path = os.environ.get('DATA_PATH', os.path.join(root, 'data'))
         conn = sqlite3.connect(os.path.join(data_path, 'nba.db'))
         conn.execute('DELETE FROM game_features')
         conn.commit()
         conn.close()
 
-        subprocess.run([python, os.path.join(base, 'features.py')], check=True)
+        subprocess.run([python, os.path.join(root, 'data', 'features.py')], check=True)
         print('Features calculadas.', flush=True)
 
-        subprocess.run([python, os.path.join(base, 'train.py')], check=True)
+        subprocess.run([python, os.path.join(root, 'data', 'train.py')], check=True)
         print('Modelo retreinado.', flush=True)
 
         last_update = datetime.now(timezone.utc).date()
