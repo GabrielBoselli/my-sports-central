@@ -11,18 +11,28 @@ def check_and_post():
 
     if not data:
         print('Sem dados disponíveis.')
-        return False  
+        return False
 
     games = data['scoreboard']['games']
 
     if not games:
         print('Nenhum jogo hoje.')
-        return False  
+        return False
 
-    jogos_ativos = [g for g in games if g['gameStatus'] in [1, 2]]
+    # Verifica jogos ao vivo
+    jogos_ativos = [g for g in games if g['gameStatus'] == 2]
+    
+    # Verifica jogos futuros
+    jogos_futuros = [g for g in games if g['gameStatus'] == 1]
+
     if not jogos_ativos:
-        print('Todos os jogos encerraram.')
-        return False  
+        if jogos_futuros:
+            print('Tem jogo mais tarde, aguardando 30 minutos...')
+            time.sleep(1800)
+            return True
+        else:
+            print('Todos os jogos encerraram.')
+            return False
 
     for game in games:
         game_id = game['gameId']
@@ -44,6 +54,9 @@ def check_and_post():
                     print('Resumo executivo postado.')
             continue
 
+        if game_status != 2:
+            continue
+
         if game_id not in previous_scores:
             previous_scores[game_id] = current_score
             message = format_score_update(game)
@@ -55,15 +68,4 @@ def check_and_post():
         else:
             print('Placar não mudou, aguardando...')
 
-    return True  
-
-if __name__ == '__main__':
-    print('🏆 My Sports Central iniciado!')
-    post_message('🏆 My Sports Central está monitorando jogos ao vivo!')
-    
-    while True:
-        continuar = check_and_post()
-        if not continuar:
-            print('Encerrando bot — sem jogos ativos.')
-            break
-        time.sleep(30)
+    return True
