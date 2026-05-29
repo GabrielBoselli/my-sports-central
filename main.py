@@ -9,8 +9,8 @@ from datetime import datetime, timezone, timedelta
 import time
 import os
 import sqlite3
-import subprocess
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 os.environ['PYTHONUNBUFFERED'] = '1'
@@ -26,15 +26,20 @@ def daily_update():
     global last_update
     print('Rodando atualização diária...', flush=True)
     try:
+        print(f'Arquivos em /app: {os.listdir("/app")}', flush=True)
+        print(f'Arquivos em /app/data: {os.listdir("/app/data") if os.path.exists("/app/data") else "NAO EXISTE"}', flush=True)
+
         import importlib.util
 
         def load_module(name, path):
+            print(f'Carregando {name} de {path}', flush=True)
             spec = importlib.util.spec_from_file_location(name, path)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod
 
         base = os.path.dirname(os.path.abspath(__file__))
+        print(f'Base path: {base}', flush=True)
 
         collector = load_module('collector', os.path.join(base, 'data', 'collector.py'))
         features = load_module('features', os.path.join(base, 'data', 'features.py'))
@@ -99,7 +104,6 @@ def check_and_post():
     jogos_futuros = [g for g in games if g['gameStatus'] == 1]
     jogos_encerrados = [g for g in games if g['gameStatus'] == 3]
 
-    # Previsões pré-jogo — 1 hora antes
     for game in jogos_futuros:
         game_time_utc = game.get('gameTimeUTC', '')
         game_id = game['gameId']
@@ -117,7 +121,6 @@ def check_and_post():
         except Exception as e:
             print(f'Erro ao checar horário do jogo: {e}', flush=True)
 
-    # Jogos encerrados
     for game in jogos_encerrados:
         game_id = game['gameId']
         if game_id not in finished_games:
@@ -166,12 +169,10 @@ def check_and_post():
         else:
             print('Placar não mudou, aguardando...', flush=True)
 
-        # Win probability
         wp_alert = check_win_probability(game, win_prob_state)
         if wp_alert:
             post_alert(format_win_prob_alert(wp_alert))
 
-        # Foul trouble
         boxscore_data = get_boxscore(game_id)
         if boxscore_data:
             foul_alerts = check_foul_trouble(boxscore_data, game)
