@@ -1,4 +1,4 @@
-from sports.basketball.nba import get_live_scores, get_boxscore
+from sports.basketball.nba import get_live_scores, get_boxscore, get_next_game_wait
 from publisher.formatter import format_score_update, format_game_over, format_executive_summary
 from publisher.telegram_publisher import post_message
 import time
@@ -27,12 +27,13 @@ def check_and_post():
 
     if not jogos_ativos:
         if jogos_futuros:
-            print('Tem jogo mais tarde, aguardando 30 minutos...')
-            time.sleep(1800)
+            espera = get_next_game_wait(games)
+            if espera and espera > 0:
+                horas = int(espera // 3600)
+                minutos = int((espera % 3600) // 60)
+                print(f'Próximo jogo em {horas}h {minutos}min, aguardando...')
+                time.sleep(espera)
             return True
-        else:
-            print('Todos os jogos encerraram.')
-            return False
 
     for game in games:
         game_id = game['gameId']
