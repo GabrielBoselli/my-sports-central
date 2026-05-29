@@ -1,10 +1,10 @@
-from sports.basketball.nba import get_live_scores
-from publisher.formatter import format_score_update, format_game_over
 from publisher.telegram_publisher import post_message
+from sports.basketball.nba import get_live_scores, get_boxscore
+from publisher.formatter import format_score_update, format_game_over, format_executive_summary
 import time
 
 previous_scores = {}
-finished_games = []  # 👈 lista de jogos já encerrados
+finished_games = []  
 
 def check_and_post():
     data = get_live_scores()
@@ -26,16 +26,23 @@ def check_and_post():
         current_score = (home_score, away_score)
         game_status = game['gameStatus']
 
-        # 👇 Verifica se o jogo encerrou
+
         if game_status == 3:
             if game_id not in finished_games:
                 finished_games.append(game_id)
                 message = format_game_over(game)
                 post_message(message)
-                print('Jogo encerrado! Mensagem final postada.')
-            continue  # pula o resto do loop para esse jogo
 
-        # Lógica normal de update de placar
+
+            boxscore_data = get_boxscore(game_id)
+            if boxscore_data:
+                summary = format_executive_summary(game, boxscore_data)
+                post_message(summary)
+                print('Resumo executivo postado.')
+            continue
+
+
+
         if game_id not in previous_scores:
             previous_scores[game_id] = current_score
             message = format_score_update(game)
