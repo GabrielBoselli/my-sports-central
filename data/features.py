@@ -11,7 +11,7 @@ def parse_date(date_str):
     if not date_str:
         return None
     date_str = date_str.strip()
-    for fmt in ['%b %d, %Y', '%B %d, %Y', '%b %d,%Y']:
+    for fmt in ['%b %d, %Y', '%B %d, %Y', '%b %d,%Y', '%Y-%m-%d']:
         try:
             return datetime.strptime(date_str, fmt)
         except:
@@ -28,7 +28,7 @@ def get_team_last_n_games(cursor, team_id, before_game_id, n=10):
         WHERE tgs.team_id = ?
           AND g.game_id != ?
           AND g.game_id < ?
-        ORDER BY g.game_date DESC, g.game_id DESC
+        ORDER BY g.game_id DESC
         LIMIT ?
     ''', (team_id, before_game_id, before_game_id, n))
     return cursor.fetchall()
@@ -141,18 +141,25 @@ def calc_team_features(cursor, team_id, before_game_id, prefix):
         f'{prefix}_back_to_back': back_to_back,
     }
 
-def calc_h2h_features(cursor, home_team_id, away_team_id, before_game_id, n=5):
-    cursor.execute('''
-        SELECT g.home_win, g.home_score, g.away_score
+def calc_h2h_features(cursor, home_team_id, away_team_id, before_game_id, n=5, exclude_season=None):
+    season_filter = "AND g.season != ?" if exclude_season else ""
+    params = [home_team_id, away_team_id, away_team_id, home_team_id,
+              before_game_id, before_game_id]
+    if exclude_season:
+        params.append(exclude_season)
+    params.append(n)
+
+    cursor.execute(f'''
+        SELECT g.home_win, g.home_score, g.away_score, g.home_team_id
         FROM games g
         WHERE ((g.home_team_id = ? AND g.away_team_id = ?)
             OR (g.home_team_id = ? AND g.away_team_id = ?))
           AND g.game_id != ?
           AND g.game_id < ?
-        ORDER BY g.game_date DESC, g.game_id DESC
+          {season_filter}
+        ORDER BY g.game_id DESC
         LIMIT ?
-    ''', (home_team_id, away_team_id, away_team_id, home_team_id,
-          before_game_id, before_game_id, n))
+    ''', params)
     rows = cursor.fetchall()
 
     if not rows:
@@ -166,11 +173,18 @@ def calc_h2h_features(cursor, home_team_id, away_team_id, before_game_id, n=5):
     away_wins = 0
     total_pts = []
 
-    for home_win, home_score, away_score in rows:
-        if home_win == 1:
+    for home_win, home_score, away_score, db_home_id in rows:
+        # Conta vitória do ponto de vista do home_team_id da query
+        if db_home_id == home_team_id:
+            won = home_win == 1
+        else:
+            won = home_win == 0
+
+        if won:
             home_wins += 1
         else:
             away_wins += 1
+
         if home_score and away_score:
             total_pts.append(home_score + away_score)
 
@@ -195,7 +209,7 @@ def build_features():
           AND away_team_id IS NOT NULL
           AND home_win IS NOT NULL
           AND total_points IS NOT NULL
-        ORDER BY game_date ASC, game_id ASC
+        ORDER BY game_id ASC
     ''')
     games = cursor.fetchall()
 
