@@ -1,7 +1,7 @@
 import sqlite3
 import time
 import os
-from nba_api.stats.endpoints import teamgamelog
+from nba_api.stats.endpoints import leaguegamefinder
 from nba_api.stats.static import teams as nba_teams_static
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'nba.db')
@@ -20,9 +20,6 @@ def init_db():
     conn.close()
     print('Banco inicializado.', flush=True)
 
-def get_all_teams():
-    return nba_teams_static.get_teams()
-
 def calc_ts_pct(pts, fga, fta):
     denominator = 2 * (fga + 0.44 * fta)
     if denominator == 0:
@@ -32,102 +29,124 @@ def calc_ts_pct(pts, fga, fta):
 def calc_pace(fga, oreb, tov, fta):
     return fga - oreb + tov + (0.44 * fta)
 
-def collect_team_season(team_id, season, season_type):
+def collect_season(season, season_type):
     try:
-        gamelog = teamgamelog.TeamGameLog(
-            team_id=team_id,
-            season=season,
-            season_type_all_star=season_type
+        finder = leaguegamefinder.LeagueGameFinder(
+            season_nullable=season,
+            season_type_nullable=season_type,
+            league_id_nullable='00'
         )
-        df = gamelog.get_data_frames()[0]
-        time.sleep(0.6)
+        df = finder.get_data_frames()[0]
+        time.sleep(0.8)
         return df
     except Exception as e:
-        print(f'Erro ao coletar {team_id} {season} {season_type}: {e}', flush=True)
+        print(f'Erro ao coletar {season} {season_type}: {e}', flush=True)
         return None
 
-def parse_matchup(matchup):
-    return 1 if 'vs.' in matchup else 0
+def get_team_id_map():
+    teams = nba_teams_static.get_teams()
+    return {t['abbreviation']: t['id'] for t in teams}
 
-def get_opponent_tricode(matchup):
-    parts = matchup.replace('vs.', '@').split('@')
-    return parts[-1].strip()
-
-def get_team_tricode(matchup):
-    return matchup.split(' ')[0].strip()
-
-def save_team_games(df, team_id, season, season_type, conn):
+def save_season_games(df, season, season_type, conn):
     cursor = conn.cursor()
     is_playoff = 1 if season_type == 'Playoffs' else 0
 
+    # Agrupa por game_id — cada jogo aparece duas vezes (home e away)
+    grouped = {}
     for _, row in df.iterrows():
-        game_id = row['Game_ID']
-        is_home = parse_matchup(row['MATCHUP'])
-        team_tricode = get_team_tricode(row['MATCHUP'])
-        ts_pct = calc_ts_pct(row['PTS'], row['FGA'], row['FTA'])
-        pace = calc_pace(row['FGA'], row['OREB'], row['TOV'], row['FTA'])
+        game_id = row['GAME_ID']
+        if game_id not in grouped:
+            grouped[game_id] = []
+        grouped[game_id].append(row)
 
+    saved = 0
+    for game_id, rows in grouped.items():
+        if len(rows) != 2:
+            continue
+
+        home_rows = [r for r in rows if 'vs.' in str(r['MATCHUP'])]
+        away_rows = [r for r in rows if ' @ ' in str(r['MATCHUP'])]
+
+        if not home_rows or not away_rows:
+            continue
+
+        home_row = home_rows[0]
+        away_row = away_rows[0]
+
+        home_id = int(home_row['TEAM_ID'])
+        away_id = int(away_row['TEAM_ID'])
+        home_tricode = home_row['TEAM_ABBREVIATION']
+        away_tricode = away_row['TEAM_ABBREVIATION']
+        home_score = int(home_row['PTS']) if home_row['PTS'] else None
+        away_score = int(away_row['PTS']) if away_row['PTS'] else None
+        home_win = 1 if home_row['WL'] == 'W' else 0
+        game_date = home_row['GAME_DATE']
+        total_points = (home_score + away_score) if home_score and away_score else None
+
+        # Salva jogo
         cursor.execute('''
-            INSERT OR IGNORE INTO team_game_stats
-            (game_id, team_id, is_home, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct,
-             ftm, fta, ft_pct, oreb, dreb, reb, ast, stl, blk, tov, pts, ts_pct, pace)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO games
+            (game_id, game_date, season, season_type,
+             home_team_id, away_team_id,
+             home_team_tricode, away_team_tricode,
+             home_score, away_score,
+             home_win, total_points, is_playoff)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            game_id, team_id, is_home,
-            row['FGM'], row['FGA'], row['FG_PCT'],
-            row['FG3M'], row['FG3A'], row['FG3_PCT'],
-            row['FTM'], row['FTA'], row['FT_PCT'],
-            row['OREB'], row['DREB'], row['REB'],
-            row['AST'], row['STL'], row['BLK'],
-            row['TOV'], row['PTS'], ts_pct, pace
+            game_id, game_date, season, season_type,
+            home_id, away_id,
+            home_tricode, away_tricode,
+            home_score, away_score,
+            home_win, total_points, is_playoff
         ))
 
-        if is_home:
-            home_win = 1 if row['WL'] == 'W' else 0
+        # Salva stats do time home
+        for row, is_home in [(home_row, 1), (away_row, 0)]:
+            team_id = int(row['TEAM_ID'])
+            pts = int(row['PTS']) if row['PTS'] else 0
+            fga = int(row['FGA']) if row['FGA'] else 0
+            fta = int(row['FTA']) if row['FTA'] else 0
+            oreb = int(row['OREB']) if row['OREB'] else 0
+            tov = int(row['TOV']) if row['TOV'] else 0
+            ts_pct = calc_ts_pct(pts, fga, fta)
+            pace = calc_pace(fga, oreb, tov, fta)
+
             cursor.execute('''
-                INSERT OR IGNORE INTO games
-                (game_id, game_date, season, season_type,
-                 home_team_id, home_team_tricode,
-                 home_score, home_win, is_playoff)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO team_game_stats
+                (game_id, team_id, is_home, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct,
+                 ftm, fta, ft_pct, oreb, dreb, reb, ast, stl, blk, tov, pts, ts_pct, pace)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                game_id, row['GAME_DATE'], season, season_type,
-                team_id, team_tricode,
-                row['PTS'], home_win, is_playoff
-            ))
-        else:
-            cursor.execute('''
-                UPDATE games SET
-                    away_team_id = ?,
-                    away_team_tricode = ?,
-                    away_score = ?,
-                    total_points = home_score + ?
-                WHERE game_id = ?
-            ''', (
-                team_id, team_tricode,
-                row['PTS'], row['PTS'], game_id
+                game_id, team_id, is_home,
+                row['FGM'], row['FGA'], row['FG_PCT'],
+                row['FG3M'], row['FG3A'], row['FG3_PCT'],
+                row['FTM'], row['FTA'], row['FT_PCT'],
+                row['OREB'], row['DREB'], row['REB'],
+                row['AST'], row['STL'], row['BLK'],
+                row['TOV'], row['PTS'], ts_pct, pace
             ))
 
+        saved += 1
+
     conn.commit()
+    return saved
 
 def collect_all():
     init_db()
-    all_teams = get_all_teams()
-    total = len(all_teams) * len(SEASONS) * len(SEASON_TYPES)
-    count = 0
-
     conn = get_connection()
+
+    total = len(SEASONS) * len(SEASON_TYPES)
+    count = 0
 
     for season in SEASONS:
         for season_type in SEASON_TYPES:
-            for team in all_teams:
-                count += 1
-                team_id = team['id']
-                print(f'[{count}/{total}] {team["abbreviation"]} — {season} {season_type}', flush=True)
+            count += 1
+            print(f'[{count}/{total}] {season} — {season_type}', flush=True)
 
-                df = collect_team_season(team_id, season, season_type)
-                if df is not None and not df.empty:
-                    save_team_games(df, team_id, season, season_type, conn)
+            df = collect_season(season, season_type)
+            if df is not None and not df.empty:
+                saved = save_season_games(df, season, season_type, conn)
+                print(f'  {saved} jogos salvos.', flush=True)
 
     conn.close()
     print('Coleta concluída!', flush=True)

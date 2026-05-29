@@ -5,6 +5,7 @@ from sports.basketball.alerts import (
 )
 from publisher.formatter import format_score_update, format_game_over, format_executive_summary
 from publisher.telegram_publisher import post_message, post_alert
+from datetime import datetime, timezone, timedelta
 import time
 import os
 
@@ -14,6 +15,7 @@ previous_scores = {}
 finished_games = []
 foul_alerts_sent = set()
 win_prob_state = {}
+predictions_sent = set()
 
 def check_and_post():
     data = get_live_scores()
@@ -32,6 +34,25 @@ def check_and_post():
     jogos_futuros = [g for g in games if g['gameStatus'] == 1]
     jogos_encerrados = [g for g in games if g['gameStatus'] == 3]
 
+    # Previsões pré-jogo — 1 hora antes
+    for game in jogos_futuros:
+        game_time_utc = game.get('gameTimeUTC', '')
+        game_id = game['gameId']
+        try:
+            dt = datetime.fromisoformat(game_time_utc.replace('Z', '+00:00'))
+            minutos = (dt - datetime.now(timezone.utc)).total_seconds() / 60
+            if 55 <= minutos <= 65 and game_id not in predictions_sent:
+                predictions_sent.add(game_id)
+                print(f'Disparando previsão pré-jogo para {game_id}...', flush=True)
+                try:
+                    from data.predict import run_predictions
+                    run_predictions()
+                except Exception as e:
+                    print(f'Erro ao gerar previsão: {e}', flush=True)
+        except Exception as e:
+            print(f'Erro ao checar horário do jogo: {e}', flush=True)
+
+    # Jogos encerrados
     for game in jogos_encerrados:
         game_id = game['gameId']
         if game_id not in finished_games:
