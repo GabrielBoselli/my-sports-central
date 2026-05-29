@@ -1,5 +1,8 @@
 from sports.basketball.nba import get_live_scores, get_boxscore, get_next_game_wait
-from sports.basketball.alerts import check_foul_trouble, format_foul_alert
+from sports.basketball.alerts import (
+    check_foul_trouble, format_foul_alert,
+    check_win_probability, format_win_prob_alert
+)
 from publisher.formatter import format_score_update, format_game_over, format_executive_summary
 from publisher.telegram_publisher import post_message, post_alert
 import time
@@ -10,6 +13,7 @@ os.environ['PYTHONUNBUFFERED'] = '1'
 previous_scores = {}
 finished_games = []
 foul_alerts_sent = set()
+win_prob_state = {}
 
 def check_and_post():
     data = get_live_scores()
@@ -76,7 +80,12 @@ def check_and_post():
         else:
             print('Placar não mudou, aguardando...', flush=True)
 
-        # Alertas inteligentes — canal B
+        # Win probability — só precisa do scoreboard
+        wp_alert = check_win_probability(game, win_prob_state)
+        if wp_alert:
+            post_alert(format_win_prob_alert(wp_alert))
+
+        # Foul trouble — precisa do boxscore
         boxscore_data = get_boxscore(game_id)
         if boxscore_data:
             foul_alerts = check_foul_trouble(boxscore_data, game)
