@@ -40,5 +40,5 @@ def get_next_game_wait(games):
         proximo['gameTimeUTC'].replace('Z', '+00:00')
     )
     # Calcula quantos segundos faltam (menos 30 minutos)
-    segundos = (horario_jogo - agora).total_seconds() - 1800
+    segundos = (horario_jogo - agora).total_seconds() - 4200
     return max(segundos, 0)
