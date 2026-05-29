@@ -2,6 +2,9 @@ from sports.basketball.nba import get_live_scores, get_boxscore, get_next_game_w
 from publisher.formatter import format_score_update, format_game_over, format_executive_summary
 from publisher.telegram_publisher import post_message
 import time
+import os
+
+os.environ['PYTHONUNBUFFERED'] = '1'
 
 previous_scores = {}
 finished_games = []
@@ -10,19 +13,16 @@ def check_and_post():
     data = get_live_scores()
 
     if not data:
-        print('Sem dados disponíveis.')
+        print('Sem dados disponíveis.', flush=True)
         return False
 
     games = data['scoreboard']['games']
 
     if not games:
-        print('Nenhum jogo hoje.')
+        print('Nenhum jogo hoje.', flush=True)
         return False
 
-    # Verifica jogos ao vivo
     jogos_ativos = [g for g in games if g['gameStatus'] == 2]
-    
-    # Verifica jogos futuros
     jogos_futuros = [g for g in games if g['gameStatus'] == 1]
 
     if not jogos_ativos:
@@ -31,9 +31,12 @@ def check_and_post():
             if espera and espera > 0:
                 horas = int(espera // 3600)
                 minutos = int((espera % 3600) // 60)
-                print(f'Próximo jogo em {horas}h {minutos}min, aguardando...')
+                print(f'Próximo jogo em {horas}h {minutos}min, aguardando...', flush=True)
                 time.sleep(espera)
             return True
+        else:
+            print('Todos os jogos encerraram.', flush=True)
+            return False
 
     for game in games:
         game_id = game['gameId']
@@ -47,12 +50,11 @@ def check_and_post():
                 finished_games.append(game_id)
                 message = format_game_over(game)
                 post_message(message)
-
                 boxscore_data = get_boxscore(game_id)
                 if boxscore_data:
                     summary = format_executive_summary(game, boxscore_data)
                     post_message(summary)
-                    print('Resumo executivo postado.')
+                    print('Resumo executivo postado.', flush=True)
             continue
 
         if game_status != 2:
@@ -67,6 +69,16 @@ def check_and_post():
             message = format_score_update(game)
             post_message(message)
         else:
-            print('Placar não mudou, aguardando...')
+            print('Placar não mudou, aguardando...', flush=True)
 
     return True
+
+if __name__ == '__main__':
+    print('🏆 My Sports Central iniciado!', flush=True)
+    post_message('🏆 My Sports Central está monitorando jogos ao vivo!')
+    while True:
+        continuar = check_and_post()
+        if not continuar:
+            print('Encerrando bot — sem jogos ativos.', flush=True)
+            break
+        time.sleep(30)
