@@ -25,11 +25,12 @@ def daily_update():
     global last_update
     print('Rodando atualização diária...', flush=True)
     try:
-        python = sys.executable
-        env = os.environ.copy()
-        env['PYTHONPATH'] = os.path.dirname(os.path.abspath(__file__))
+        import importlib
+        import data.collector as collector
+        import data.features as features
+        import data.train as train
 
-        subprocess.run([python, '-m', 'data.collector'], check=True, env=env)
+        collector.collect_all()
         print('Coleta concluída.', flush=True)
 
         data_path = os.environ.get('DATA_PATH', 'data')
@@ -38,10 +39,10 @@ def daily_update():
         conn.commit()
         conn.close()
 
-        subprocess.run([python, '-m', 'data.features'], check=True, env=env)
+        features.build_features()
         print('Features calculadas.', flush=True)
 
-        subprocess.run([python, '-m', 'data.train'], check=True, env=env)
+        train.main()
         print('Modelo retreinado.', flush=True)
 
         last_update = datetime.now(timezone.utc).date()
