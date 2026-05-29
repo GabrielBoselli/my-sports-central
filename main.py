@@ -24,6 +24,22 @@ def check_and_post():
 
     jogos_ativos = [g for g in games if g['gameStatus'] == 2]
     jogos_futuros = [g for g in games if g['gameStatus'] == 1]
+    jogos_encerrados = [g for g in games if g['gameStatus'] == 3]
+
+    # Processa jogos encerrados sempre
+    for game in jogos_encerrados:
+        game_id = game['gameId']
+        if game_id not in finished_games:
+            print(f'Jogo encerrado: {game_id}', flush=True)
+            finished_games.append(game_id)
+            message = format_game_over(game)
+            post_message(message)
+            boxscore_data = get_boxscore(game_id)
+            print(f'Boxscore retornou: {boxscore_data is not None}', flush=True)
+            if boxscore_data:
+                summary = format_executive_summary(game, boxscore_data)
+                post_message(summary)
+                print('Resumo executivo postado.', flush=True)
 
     if not jogos_ativos:
         if jogos_futuros:
@@ -44,18 +60,6 @@ def check_and_post():
         away_score = game['awayTeam']['score']
         current_score = (home_score, away_score)
         game_status = game['gameStatus']
-
-        if game_status == 3:
-            if game_id not in finished_games:
-                finished_games.append(game_id)
-                message = format_game_over(game)
-                post_message(message)
-                boxscore_data = get_boxscore(game_id)
-                if boxscore_data:
-                    summary = format_executive_summary(game, boxscore_data)
-                    post_message(summary)
-                    print('Resumo executivo postado.', flush=True)
-            continue
 
         if game_status != 2:
             continue
@@ -81,4 +85,4 @@ if __name__ == '__main__':
         if not continuar:
             print('Encerrando bot — sem jogos ativos.', flush=True)
             break
-        time.sleep(30)
+        tim
