@@ -1,6 +1,7 @@
 from sports.basketball.nba import get_live_scores, get_boxscore, get_next_game_wait
+from sports.basketball.alerts import check_foul_trouble, format_foul_alert
 from publisher.formatter import format_score_update, format_game_over, format_executive_summary
-from publisher.telegram_publisher import post_message
+from publisher.telegram_publisher import post_message, post_alert
 import time
 import os
 
@@ -8,6 +9,7 @@ os.environ['PYTHONUNBUFFERED'] = '1'
 
 previous_scores = {}
 finished_games = []
+foul_alerts_sent = set()
 
 def check_and_post():
     data = get_live_scores()
@@ -26,7 +28,6 @@ def check_and_post():
     jogos_futuros = [g for g in games if g['gameStatus'] == 1]
     jogos_encerrados = [g for g in games if g['gameStatus'] == 3]
 
-    # Processa jogos encerrados sempre
     for game in jogos_encerrados:
         game_id = game['gameId']
         if game_id not in finished_games:
@@ -74,6 +75,16 @@ def check_and_post():
             post_message(message)
         else:
             print('Placar não mudou, aguardando...', flush=True)
+
+        # Alertas inteligentes — canal B
+        boxscore_data = get_boxscore(game_id)
+        if boxscore_data:
+            foul_alerts = check_foul_trouble(boxscore_data, game)
+            for alert in foul_alerts:
+                alert_key = f"{game_id}_{alert['player']}_{alert['fouls']}"
+                if alert_key not in foul_alerts_sent:
+                    foul_alerts_sent.add(alert_key)
+                    post_alert(format_foul_alert(alert))
 
     return True
 
