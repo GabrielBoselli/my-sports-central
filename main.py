@@ -58,7 +58,7 @@ def first_run():
 
 def should_update():
     agora = datetime.now(timezone.utc)
-    if agora.hour == 6:
+    if agora.hour == 14:
         hoje = agora.date()
         if last_update != hoje:
             return True
