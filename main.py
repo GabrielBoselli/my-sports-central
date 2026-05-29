@@ -69,13 +69,14 @@ def check_and_post():
 
     if not data:
         print('Sem dados disponíveis.', flush=True)
-        return False
+        return True
 
     games = data['scoreboard']['games']
 
     if not games:
-        print('Nenhum jogo hoje.', flush=True)
-        return False
+        print('Nenhum jogo hoje. Verificando em 1 hora...', flush=True)
+        time.sleep(3600)
+        return True
 
     jogos_ativos = [g for g in games if g['gameStatus'] == 2]
     jogos_futuros = [g for g in games if g['gameStatus'] == 1]
@@ -122,10 +123,10 @@ def check_and_post():
                 minutos = int((espera % 3600) // 60)
                 print(f'Próximo jogo em {horas}h {minutos}min, aguardando...', flush=True)
                 time.sleep(espera)
-            return True
         else:
-            print('Todos os jogos encerraram.', flush=True)
-            return False
+            print('Sem jogos hoje. Verificando em 1 hora...', flush=True)
+            time.sleep(3600)
+        return True
 
     for game in games:
         game_id = game['gameId']
@@ -172,8 +173,5 @@ if __name__ == '__main__':
     while True:
         if should_update():
             daily_update()
-        continuar = check_and_post()
-        if not continuar:
-            print('Encerrando bot — sem jogos ativos.', flush=True)
-            break
+        check_and_post()
         time.sleep(30)
