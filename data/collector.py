@@ -4,7 +4,8 @@ import os
 from nba_api.stats.endpoints import leaguegamefinder
 from nba_api.stats.static import teams as nba_teams_static
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'nba.db')
+DATA_PATH = os.environ.get('DATA_PATH', os.path.dirname(__file__))
+DB_PATH = os.path.join(DATA_PATH, 'nba.db')
 SEASONS = ['2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26']
 SEASON_TYPES = ['Regular Season', 'Playoffs']
 

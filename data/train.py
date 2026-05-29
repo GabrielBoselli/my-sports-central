@@ -7,7 +7,8 @@ from sklearn.calibration import CalibratedClassifierCV
 from xgboost import XGBClassifier
 import pickle
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'nba.db')
+DATA_PATH = os.environ.get('DATA_PATH', os.path.dirname(__file__))
+DB_PATH = os.path.join(DATA_PATH, 'nba.db')
 
 FEATURES = [
     'home_last10_winrate', 'away_last10_winrate',
@@ -66,7 +67,7 @@ def train_model(df, target, model_name):
     print(f'Accuracy:    {acc:.4f} ({acc*100:.1f}%)')
     print(f'Brier Score: {brier:.4f} (menor = melhor, 0.25 = random)')
 
-    model_path = os.path.join(os.path.dirname(__file__), f'{model_name}.pkl')
+    model_path = os.path.join(os.environ.get('DATA_PATH', os.path.dirname(__file__)), f'{model_name}.pkl')
     with open(model_path, 'wb') as f:
         pickle.dump(model, f)
     print(f'Modelo salvo em data/{model_name}.pkl')

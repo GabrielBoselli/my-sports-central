@@ -8,6 +8,9 @@ from publisher.telegram_publisher import post_message, post_alert
 from datetime import datetime, timezone, timedelta
 import time
 import os
+import sqlite3
+import subprocess
+import sys
 
 os.environ['PYTHONUNBUFFERED'] = '1'
 
@@ -16,6 +19,50 @@ finished_games = []
 foul_alerts_sent = set()
 win_prob_state = {}
 predictions_sent = set()
+last_update = None
+
+def daily_update():
+    global last_update
+    print('Rodando atualização diária...', flush=True)
+    try:
+        python = sys.executable
+        base = os.path.join(os.path.dirname(__file__), 'data')
+
+        subprocess.run([python, os.path.join(base, 'collector.py')], check=True)
+        print('Coleta concluída.', flush=True)
+
+        data_path = os.environ.get('DATA_PATH', base)
+        conn = sqlite3.connect(os.path.join(data_path, 'nba.db'))
+        conn.execute('DELETE FROM game_features')
+        conn.commit()
+        conn.close()
+
+        subprocess.run([python, os.path.join(base, 'features.py')], check=True)
+        print('Features calculadas.', flush=True)
+
+        subprocess.run([python, os.path.join(base, 'train.py')], check=True)
+        print('Modelo retreinado.', flush=True)
+
+        last_update = datetime.now(timezone.utc).date()
+        print('Atualização diária concluída!', flush=True)
+
+    except Exception as e:
+        print(f'Erro na atualização diária: {e}', flush=True)
+
+def first_run():
+    data_path = os.environ.get('DATA_PATH', 'data')
+    db_path = os.path.join(data_path, 'nba.db')
+    if not os.path.exists(db_path):
+        print('Primeira execução — rodando pipeline completo...', flush=True)
+        daily_update()
+
+def should_update():
+    agora = datetime.now(timezone.utc)
+    if agora.hour == 6:
+        hoje = agora.date()
+        if last_update != hoje:
+            return True
+    return False
 
 def check_and_post():
     data = get_live_scores()
@@ -101,12 +148,12 @@ def check_and_post():
         else:
             print('Placar não mudou, aguardando...', flush=True)
 
-        # Win probability — só precisa do scoreboard
+        # Win probability
         wp_alert = check_win_probability(game, win_prob_state)
         if wp_alert:
             post_alert(format_win_prob_alert(wp_alert))
 
-        # Foul trouble — precisa do boxscore
+        # Foul trouble
         boxscore_data = get_boxscore(game_id)
         if boxscore_data:
             foul_alerts = check_foul_trouble(boxscore_data, game)
@@ -120,8 +167,11 @@ def check_and_post():
 
 if __name__ == '__main__':
     print('🏆 My Sports Central iniciado!', flush=True)
+    first_run()
     post_message('🏆 My Sports Central está monitorando jogos ao vivo!')
     while True:
+        if should_update():
+            daily_update()
         continuar = check_and_post()
         if not continuar:
             print('Encerrando bot — sem jogos ativos.', flush=True)
