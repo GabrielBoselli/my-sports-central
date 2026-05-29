@@ -26,11 +26,14 @@ def daily_update():
     global last_update
     print('Rodando atualização diária...', flush=True)
     try:
-        import importlib
-        import data.collector as collector
-        import data.features as features
-        import data.train as train
+        print('Importando collector...', flush=True)
+        from data import collector
+        print('Importando features...', flush=True)
+        from data import features
+        print('Importando train...', flush=True)
+        from data import train
 
+        print('Rodando collector...', flush=True)
         collector.collect_all()
         print('Coleta concluída.', flush=True)
 
@@ -40,9 +43,11 @@ def daily_update():
         conn.commit()
         conn.close()
 
+        print('Rodando features...', flush=True)
         features.build_features()
         print('Features calculadas.', flush=True)
 
+        print('Rodando train...', flush=True)
         train.main()
         print('Modelo retreinado.', flush=True)
 
@@ -50,7 +55,9 @@ def daily_update():
         print('Atualização diária concluída!', flush=True)
 
     except Exception as e:
+        import traceback
         print(f'Erro na atualização diária: {e}', flush=True)
+        print(traceback.format_exc(), flush=True)
 
 def first_run():
     data_path = os.environ.get('DATA_PATH', 'data')
